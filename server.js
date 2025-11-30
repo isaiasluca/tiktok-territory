@@ -1,12 +1,43 @@
-require("dotenv").config();
-const express=require("express"),cors=require("cors"),http=require("http"),WebSocket=require("ws"),TikTokLive=require("tiktok-live-connector");
-const app=express();app.use(cors());
-const server=http.createServer(app);
-const wss=new WebSocket.Server({server,path:"/ws"});
-const tiktok=new TikTokLive(process.env.TIKTOK_USERNAME,{enableExtendedGiftInfo:true});
-wss.on("connection",ws=>{ws.send(JSON.stringify({type:"connected"}));});
-function sendAll(d){wss.clients.forEach(c=>c.readyState===WebSocket.OPEN&&c.send(JSON.stringify(d)));}
-tiktok.on("chat",d=>sendAll({type:"comment",username:d.nickname,comment:d.comment,userId:d.userId,avatar:d.profilePictureUrl}));
-tiktok.on("like",d=>sendAll({type:"like",username:d.nickname,likes:d.likeCount}));
-tiktok.on("gift",d=>{if(d.giftType===1&&!d.repeatEnd)return;sendAll({type:"gift",username:d.nickname,userId:d.userId,giftName:d.giftName.toLowerCase(),avatar:d.profilePictureUrl,count:d.repeatCount});});
-server.listen(process.env.PORT||10000,()=>{console.log("OK");tiktok.connect();});
+const express = require("express");
+const { WebcastPushConnection } = require("tiktok-live-connector");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Nome de usuário do TikTok (sem @)
+const tiktokUsername = process.env.TIKTOK_USERNAME;
+
+app.get("/", (req, res) => {
+    res.send("Servidor do TikTok Territory ativo! 🚀");
+});
+
+// Conexão com o TikTok
+const connection = new WebcastPushConnection(tiktokUsername, {
+    enableExtendedGiftInfo: true
+});
+
+// Quando conectar
+connection.connect().then(state => {
+    console.log(`🎉 Conectado ao TikTok Live de @${state.roomInfo.owner.nickname}`);
+}).catch(err => {
+    console.error("❌ Erro ao conectar:", err);
+});
+
+// Evento: comentário
+connection.on('chat', data => {
+    console.log(`💬 ${data.uniqueId}: ${data.comment}`);
+});
+
+// Evento: like
+connection.on('like', data => {
+    console.log(`❤️ ${data.uniqueId} deu ${data.likeCount} likes`);
+});
+
+// Evento: gift
+connection.on('gift', data => {
+    console.log(`🎁 ${data.uniqueId} enviou ${data.giftName}`);
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor rodando na porta ${PORT}`);
+});
